@@ -10,7 +10,7 @@ To investigate whether timbre-related auditory information can be decoded from e
 ## 🗃️ `classification_Groupcv.py`
 
 - Loads and prepares EEG data for classification.
-- Labels each trial based on stimulus condition.
+- Labels each trial based on stimulus condition (based on information already stored in .mat data matrix)
 - Uses **GroupKFold** to split trials into training/testing sets while ensuring block-wise trial grouping (trials were presented in blocks of 5 per participant).
 - Includes:
   - PCA-based dimensionality reduction
