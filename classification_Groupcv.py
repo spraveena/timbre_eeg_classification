@@ -16,15 +16,12 @@ from sklearn.svm import SVC
 def load_data(subject_num):
 
 	from scipy.signal import butter, lfilter
-
-	master_data = {}
-	master_labels = {}
     
 	#For 5-way classification
 	filename = "data/P"+str(subject_num)+'dataxepoch_ar.mat'
 	reject = [1,3,8,11,13]
 
-	# Skip Participant #8 cos bad data
+	#skip noisy data
 	if subject_num in reject :
 		print("Noisy data.. choose a different participant")
 	
@@ -52,13 +49,6 @@ def load_data(subject_num):
 		#uncomment for erp-based features
 		# b,a = butter(4, [0.1, 40], fs=2048, btype='band')
 		# data_sub = lfilter(b, a, data_sub)
-		
-		
-
-
-
-		
-
 
 		
 		eeg_data.extend(data_sub)
@@ -101,7 +91,7 @@ def load_data(subject_num):
 
 
 
-def shuffle_arrays(A, B, C,seed=None):
+def shuffle_arrays(A, B, C,seed=42):
     if seed is not None:
         np.random.seed(seed)
         
@@ -182,6 +172,7 @@ def train_classification_withholdout(data,labels,groups,clf):
 		'min_samples_split': [2, 5, 6,7, 10],
 		'n_estimators': [50,100,200]
 	}]
+
 	clf_param_map = {
 		GradientBoostingClassifier: param[0],
 		SVC: param[1],
@@ -257,8 +248,7 @@ if __name__ == "__main__":
 	from sklearn.model_selection import GroupShuffleSplit
 	from sklearn.preprocessing import RobustScaler
 	import feature_extraction as fe
-	import time
-	import sys
+
 	import pickle
 
 	# participant_num = sys.argv[1]
@@ -279,11 +269,9 @@ if __name__ == "__main__":
 
 	#reshape to normalize data, reshape to original form
 	data = np.asarray(data)
-	data_2d = data.reshape(data.shape[0],-1)
-	scaler = RobustScaler().fit(data_2d)
-	data_2d = scaler.transform(data_2d)
-	data = data_2d.reshape(data.shape[0],data.shape[1],data.shape[2])
-	print(np.shape(data))
+	scaler = RobustScaler().fit(data.reshape(data.shape[0], -1))
+	data = scaler.transform(data.reshape(data.shape[0], -1)).reshape(data.shape[0],data.shape[1],data.shape[2])
+
 
 	classifiers = [GradientBoostingClassifier,SVC,KNeighborsClassifier,LinearDiscriminantAnalysis,RandomForestClassifier]
 
