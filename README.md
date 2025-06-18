@@ -1,2 +1,2 @@
-# Single Trial EEG Classification for Timbre Perception
+# Single Trial EEG Classification Decoding Timbre Perception
 
