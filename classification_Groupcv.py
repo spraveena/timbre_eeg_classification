@@ -1,3 +1,14 @@
+"""
+EEG Classification with Group Cross-Validation
+------------------------------------------------
+Performs multi-class classification of EEG data using group-aware cross-validation,
+dynamic classifier selection, PCA feature selection, and hyperparameter tuning.
+
+Author: Praveena Satkuanrajah
+
+"""
+
+
 import numpy as np
 import scipy.io 
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
@@ -14,20 +25,29 @@ from sklearn.svm import SVC
 
 #Participant dictionary keys: "P1", "P2", "P3", "P4", 'P5', 'P6', 'P7', 'P9', 'P10', 'P11', 'P12'
 def load_data(subject_num):
+	"""
+    Load EEG data from .mat file for a given subject number, extract relevant channels and trials,
+    and assign group numbers for group cross-validation.
+
+    Parameters:
+        subject_num (int): Subject number to identify file to load.
+
+    Returns:
+        eeg_shuff (np.ndarray): Shuffled EEG data.
+        label_shuff (np.ndarray): Shuffled labels.
+        groups (np.ndarray): Group assignments for cross-validation.
+    """
 
 	from scipy.signal import butter, lfilter
     
 	#For 5-way classification
-	filename = "data/P"+str(subject_num)+'dataxepoch_ar.mat'
-	reject = [1,3,8,11,13]
-
-	#skip noisy data
-	if subject_num in reject :
-		print("Noisy data.. choose a different participant")
+	filename = ""
+	
 	
 
 	
 	data = scipy.io.loadmat(filename)
+	#iterate through dictionary and extract relevant keys
 	keys = [x for x in data.keys() if "P" in x]
 
 	#create dictionary for each key for each participant
@@ -70,16 +90,18 @@ def load_data(subject_num):
 		else:
 				groups.extend([initial_value]*5)
 		initial_value += increment_value
-	trial_within_block = []
-	for i in range(0,len(data),5):
-		trial_within_block.extend([1,2,3,4,5])
+
 	
 
 
 	groups = np.asarray(groups)
-	eeg_labels = np.concatenate((1*np.ones(np.shape(data[keys[0]])[0]),2*np.ones(np.shape(data[keys[1]])[0]),
-							   3*np.ones(np.shape(data[keys[2]])[0]),4*np.ones(np.shape(data[keys[3]])[0]),
-							   5*np.ones(np.shape(data[keys[4]])[0])))
+	eeg_labels = np.concatenate([
+        1 * np.ones(data[keys[0]].shape[0]),
+        2 * np.ones(data[keys[1]].shape[0]),
+        3 * np.ones(data[keys[2]].shape[0]),
+        4 * np.ones(data[keys[3]].shape[0]),
+        5 * np.ones(data[keys[4]].shape[0])
+    ])
 
 
 	eeg_data = np.asarray(eeg_data)
@@ -92,6 +114,16 @@ def load_data(subject_num):
 
 
 def shuffle_arrays(A, B, C,seed=42):
+	"""
+    Shuffles data, labels, and group assignments using a shared random seed.
+
+    Parameters:
+        A, B, C (np.ndarray): Arrays to shuffle.
+        seed (int): Random seed.
+
+    Returns:
+        A_shuffled, B_shuffled, C_shuffled (np.ndarray): Shuffled arrays.
+    """
     if seed is not None:
         np.random.seed(seed)
         
@@ -194,7 +226,7 @@ def train_classification_withholdout(data,labels,groups,clf):
 	
 
 	for i in range(1,11):
-		print(f"Beginning run {i} of 5-fold CV.......................................................................")
+
 		logging.info(f"Beginning run {i} of 5-fold CV.......................................................................")
 		
 		
@@ -203,10 +235,8 @@ def train_classification_withholdout(data,labels,groups,clf):
 		for train_index, test_index in splits:
 			data = np.asarray(data)
 			labels = np.asarray(labels)
-			train_data = data[train_index]
-			test_data = data[test_index]
-			train_labels = labels[train_index]
-			test_labels = labels[test_index]
+			train_data,test_data = data[train_index],data[test_index]
+			train_labels, test_labels = labels[train_index],labels[test_index]
 
 
 			logging.info("Fitting data processing pipeline.............................................")
@@ -218,13 +248,11 @@ def train_classification_withholdout(data,labels,groups,clf):
 			logging.info(pipeline[1].best_estimator_)
 
 			logging.info("Going into cross validation  testing...............................")
-			# cv_score = cross_val_predict(pipeline,data,labels,cv=5)
 			cv_pred = pipeline.predict(test_data)
 			accuracy = accuracy_score(cv_pred,test_labels )
 			score = precision_recall_fscore_support(cv_pred, test_labels)
-			print(f"Accuracy:{accuracy}")
 			classification_scores.append(accuracy)
-			overall_conf_mat += confusion_matrix(labels[test_index], cv_pred)
+			overall_conf_mat += confusion_matrix(test_labels, cv_pred)
 			score_matrix+=score
 		
 		
@@ -234,9 +262,6 @@ def train_classification_withholdout(data,labels,groups,clf):
 	logging.info("Mean Score: %.3f		Std: %.3f  "%(np.mean(classification_scores),np.std(classification_scores)))
 	logging.info(score_matrix)
 	logging.info(overall_conf_mat)
-	logging.info(n_feature_importance)
-	logging.info(np.mean(n_feature_list))
-	logging.info(n_feature_list)
 
 	logging.info(f"Execution time: {time.time() - start_time}")
 
@@ -245,74 +270,36 @@ def train_classification_withholdout(data,labels,groups,clf):
 
 if __name__ == "__main__":
 
-	from sklearn.model_selection import GroupShuffleSplit
-	from sklearn.preprocessing import RobustScaler
-	import feature_extraction as fe
 
 	import pickle
+	from sklearn.preprocessing import RobustScaler
+    import feature_extraction as fe
 
-	# participant_num = sys.argv[1]
-	participant_num = 6
-	
-	
-	data,labels,groups = load_data(participant_num)
-	logging.info("Running true label analysis................................................................................")
-	logging.info(f"Participant Number: {participant_num}")
+    participant_num = 6
+    logging.basicConfig(filename=f'logs/P{participant_num}_ResultsLog.log', filemode='w', level=logging.INFO)
 
+    data, labels, groups = load_data(participant_num)
+    logging.info(f"Data shape: {data.shape}, Labels: {labels.shape}, Groups: {groups.shape}")
 
-	# Assign group values for blocks to preserve during splitting and cross validation
+    scaler = RobustScaler().fit(data.reshape(data.shape[0], -1))
+    data = scaler.transform(data.reshape(data.shape[0], -1)).reshape(data.shape)
 
-	logging.info(f"Shape of data matrix: {np.shape(data)}")
-	logging.info(f"Shape of labels matrix: {np.shape(labels)}")
-	logging.info(f"Shape of groups matrix: {np.shape(groups)}")
+    classifiers = [GradientBoostingClassifier, SVC, KNeighborsClassifier, LinearDiscriminantAnalysis, RandomForestClassifier]
+    features = {
+        "erp_based": [fe.erp_features, fe.offsets_features],
+        "regularity": [fe.compute_spectral_entropy, fe.compute_periodicity],
+        "harmonics": [fe.fundamental_freq],
+        "oscillatory_bands": [fe.compute_psd]
+    }
 
+    FEATURE_TYPE = ""
 
-	#reshape to normalize data, reshape to original form
-	data = np.asarray(data)
-	scaler = RobustScaler().fit(data.reshape(data.shape[0], -1))
-	data = scaler.transform(data.reshape(data.shape[0], -1)).reshape(data.shape[0],data.shape[1],data.shape[2])
+    if FEATURE_TYPE in features:
+        extr_feat = np.hstack([func(data) for func in features[FEATURE_TYPE]])
+        with open(f'results/P{participant_num}_{FEATURE_TYPE}_features.pickle', 'wb') as f:
+            pickle.dump(extr_feat, f)
 
+    final_model = train_classification_withholdout(data, labels, groups, classifiers[3])
 
-	classifiers = [GradientBoostingClassifier,SVC,KNeighborsClassifier,LinearDiscriminantAnalysis,RandomForestClassifier]
-
-	
-	features= {
-               "erp_based":[fe.erp_features, fe.offsets_features],
-               "regularity":[fe.compute_spectral_entropy, fe.compute_periodicity],
-               "harmonics":[fe.fundamental_freq],
-			   "oscillatory_bands":[fe.compute_psd]
-        }
-	
-
-	clf = classifiers[3]
-
-
-	filename = f'{participant_num}ResultsLog.log'
-
-	logging.basicConfig(filename=filename, filemode='w', format = '%(message)s',level=logging.INFO)
-	logging.info('Logging into file')
-	
-	
-	FEATURE_TYPE = "" #refer to features dictionary for key values, possible values ("erp_based","regularity","harmonics","oscillatory_bands")
-	
-
-
-	if FEATURE_TYPE in features:
-		extr_feat = np.array([])
-		for func in features[FEATURE_TYPE]:		
-			if not np.any(extr_feat):
-				extr_feat = func(data)
-			else:
-				result = func(data)
-				extr_feat = np.hstack((extr_feat, result))
-	
-	
-
-	if 'extr_feat' in locals() and extr_feat.size > 0:
-		with open(f'P{participant_num}_{FEATURE_TYPE}_features.pickle', 'wb') as f:
-			pickle.dump(extr_feat, f)
-
-	
-	estimator = train_classification_withholdout(data,labels,groups,clf)
 		
 
